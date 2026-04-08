@@ -1,0 +1,16 @@
+# 私人数据 - 不上传
+portfolio.json
+
+# 本地缓存
+.maket_cache.json
+.last_pre_market.txt
+.last_post_market.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db

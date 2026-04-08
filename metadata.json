@@ -1,0 +1,21 @@
+{
+  "name": "china-fund-advisor",
+  "version": "3.0.0",
+  "description": "国内基金智能投顾助手 — 盘前08:30 + 盘后22:30自动推送，含热点新闻+明日展望",
+  "author": "",
+  "license": "MIT",
+  "homepage": "",
+  "repository": "",
+  "keywords": ["fund", "investment", "china", "akshare", "feishu"],
+  "openclaw": {
+    "requires": {
+      "tools": ["python3", "akshare", "feishu_doc"],
+      "env": []
+    },
+    "permissions": ["feishu_doc:write", "feishu_doc:read"],
+    "first_run": {
+      "type": "interactive",
+      "description": "首次使用需要配置持仓：提供现有飞书持仓文档链接，或让助手自动创建模板文档"
+    }
+  }
+}

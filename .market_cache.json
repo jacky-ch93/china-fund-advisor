@@ -1,0 +1,36 @@
+{
+  "source": "akshare",
+  "time": "20260408",
+  "indices": [
+    {
+      "name": "上证指数",
+      "price": 3930.2507,
+      "change_pct": 1.03
+    },
+    {
+      "name": "深证成指",
+      "price": 13717.221,
+      "change_pct": 2.36
+    },
+    {
+      "name": "创业板指",
+      "price": 3257.906,
+      "change_pct": 3.07
+    },
+    {
+      "name": "科创50",
+      "price": 1317.2757,
+      "change_pct": 3.4
+    },
+    {
+      "name": "沪深300",
+      "price": 4517.3403,
+      "change_pct": 1.73
+    }
+  ],
+  "hot_sectors": [],
+  "cold_sectors": [],
+  "zt_count": 0,
+  "zt_pool": [],
+  "market_sentiment": "❄️极冷 / 普涨"
+}
