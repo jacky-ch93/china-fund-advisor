@@ -8,22 +8,26 @@
   python3 portfolio.py remove 000001
   python3 portfolio.py list
   python3 portfolio.py clear
-  python3 portfolio.py setup "<feishu_doc_url>"   # 从飞书文档导入
+  python3 portfolio.py setup_feishu <feishu_doc_url>   # 从飞书文档导入
+  python3 portfolio.py setup_local                      # 创建本地文件管理
+  python3 portfolio.py ask_setup                         # 首次引导：询问存储方式
 """
 
 import json
 import sys
 import os
 import re
-import urllib.request
 
 PORTFOLIO_FILE = "/root/.openclaw/workspace-feishu-investment/skills/china-fund-advisor/portfolio.json"
+LOCAL_PORTFOLIO_MD = "/root/.openclaw/workspace-feishu-investment/skills/china-fund-advisor/portfolio.md"
 FEISHU_WIKI_RE = re.compile(r'wiki/([A-Za-z0-9]+)')
 FEISHU_DOCX_RE = re.compile(r'docx/([A-Za-z0-9]+)')
 
 def get_default_portfolio():
     return {
         "version": "1.0",
+        "storage": "local",  # "feishu" or "local"
+        "feishu_doc_token": None,
         "updated_at": None,
         "holder": None,
         "funds": []
@@ -34,7 +38,6 @@ def load_portfolio():
         if os.path.exists(PORTFOLIO_FILE):
             with open(PORTFOLIO_FILE, 'r') as f:
                 data = json.load(f)
-                # 验证格式
                 if "funds" in data:
                     return data
         raise FileNotFoundError("portfolio.json not found or invalid")
@@ -105,15 +108,24 @@ def cmd_list():
     if data is None:
         print(json.dumps({
             "status": "setup_required",
-            "message": "首次使用需要配置持仓",
-            "instruction": "请提供你的飞书持仓文档链接，或回复「创建模板文档」让助手自动创建"
-        }))
+            "action": "ask_setup",
+            "message": (
+                "首次使用，需要先配置你的持仓存储方式。\n\n"
+                "请选择存储方式：\n"
+                "1️⃣ 回复「飞书」— 使用飞书文档存储（推荐）：助手创建模板文档，你填入数据后保存\n"
+                "2️⃣ 回复「本地」— 使用本地文件存储：助手创建本地持仓文件管理\n\n"
+                "请直接回复「飞书」或「本地」选择存储方式。"
+            )
+        }, ensure_ascii=False))
         return
     
     funds = data.get("funds", [])
+    storage = data.get("storage", "local")
     result = {
         "status": "ok",
         "holder": data.get("holder"),
+        "storage": storage,
+        "feishu_doc_token": data.get("feishu_doc_token"),
         "funds": funds,
         "total": sum(float(f.get("amount", 0)) for f in funds)
     }
@@ -147,26 +159,25 @@ def parse_feishu_url(url):
         return ("wiki", m.group(1))
     return None
 
-def cmd_setup(feishu_url=""):
+def cmd_setup_feishu(feishu_url=""):
     """
-    首次配置：尝试从飞书文档导入，或引导用户创建模板
+    配置飞书文档存储：
+    1. 解析URL并验证
+    2. 创建配置记录
+    3. 返回创建模板文档的指令
     """
     if not feishu_url:
-        # 返回引导信息
         print(json.dumps({
             "status": "setup_required",
-            "action": "provide_url",
+            "action": "provide_feishu_url",
             "message": (
-                "首次使用，需要先配置你的持仓。\n\n"
-                "请选择：\n"
-                "1. 提供你的飞书持仓文档链接（推荐），助手自动迁移\n"
-                "2. 回复「创建模板」，助手自动创建空白持仓文档，你填入数据后再保存\n\n"
-                "已有持仓文档链接请直接粘贴过来。"
+                "请提供你的飞书文档链接（可以是空白文档或现有持仓文档）。\n\n"
+                "如果你还没有创建文档，可以直接给我任意一个飞书文档链接，"
+                "助手会帮你创建模板。或者先回复「跳过」用本地文件方式。"
             )
         }, ensure_ascii=False))
         return
     
-    # 尝试解析URL并提取数据
     parsed = parse_feishu_url(feishu_url)
     if not parsed:
         print(json.dumps({
@@ -175,12 +186,101 @@ def cmd_setup(feishu_url=""):
         }))
         return
     
+    doc_type, doc_token = parsed
+    
+    # 创建配置
+    data = get_default_portfolio()
+    data["storage"] = "feishu"
+    data["feishu_doc_token"] = doc_token
+    data["feishu_doc_type"] = doc_type
+    save_portfolio(data)
+    
     print(json.dumps({
-        "status": "importing",
-        "message": f"正在从飞书文档导入持仓数据...",
-        "doc_type": parsed[0],
-        "doc_token": parsed[1]
-    }))
+        "status": "ok",
+        "storage": "feishu",
+        "doc_type": doc_type,
+        "doc_token": doc_token,
+        "message": (
+            "✅ 飞书文档配置成功！\n\n"
+            "请前往你的飞书文档，在文档中添加以下格式的持仓信息：\n\n"
+            "| 基金代码 | 基金名称 | 持仓金额（元） |\n"
+            "|---------|---------|--------------|\n"
+            "| 012922 | 易方达全球成长精选混合(QDII)C | 47179 |\n"
+            "| 017193 | 天弘中证工业有色金属主题ETF联接C | 22343 |\n"
+            "...（按实际持仓填写）\n\n"
+            "填好后回复「已完成」，助手会读取并导入数据。"
+        )
+    }, ensure_ascii=False))
+
+def cmd_setup_local():
+    """
+    配置本地文件存储：创建空白持仓模板
+    """
+    data = get_default_portfolio()
+    data["storage"] = "local"
+    save_portfolio(data)
+    
+    # 创建本地持仓模板
+    template = """# 基金持仓记录
+
+> 本文件由基金智能投顾助手管理，请勿手动修改格式
+
+## 基本信息
+- 持有人：（请填写）
+- 更新时间：（自动）
+
+## 持仓明细
+
+| 基金代码 | 基金名称 | 持仓金额（元） | 备注 |
+|---------|---------|--------------|------|
+| （请填写） | （请填写） | （请填写） | |
+
+## 合计
+- 总持仓金额：¥（请填写）
+- 持有收益：¥（请填写）
+
+---
+
+格式说明：请按上述表格格式填写基金代码、名称和持仓金额，多只基金请添加更多行。
+"""
+    
+    try:
+        with open(LOCAL_PORTFOLIO_MD, 'w') as f:
+            f.write(template)
+    except:
+        pass
+    
+    print(json.dumps({
+        "status": "ok",
+        "storage": "local",
+        "message": (
+            "✅ 本地文件存储配置成功！\n\n"
+            "已创建本地持仓文件，请直接通过助手命令添加持仓：\n\n"
+            "示例：\n"
+            "添加持仓：012922 47179 易方达全球成长精选混合(QDII)C\n"
+            "添加持仓：017193 22343 天弘中证工业有色金属主题ETF联接C\n\n"
+            "助手会读取并管理你的持仓数据。"
+        )
+    }, ensure_ascii=False))
+
+def cmd_ask_setup():
+    """返回首次引导信息"""
+    print(json.dumps({
+        "status": "setup_required",
+        "action": "ask_setup",
+        "message": (
+            "🔧 首次使用，需要配置持仓存储方式\n\n"
+            "请选择：\n\n"
+            "1️⃣ 回复「飞书」— 使用飞书文档存储（推荐）\n"
+            "   · 助手创建持仓模板文档\n"
+            "   · 你填入基金代码/金额后保存\n"
+            "   · 每日盘后自动更新文档\n\n"
+            "2️⃣ 回复「本地」— 使用本地文件存储\n"
+            "   · 完全离线，数据保留在服务器\n"
+            "   · 通过文字命令管理持仓\n\n"
+            "请直接回复「飞书」或「本地」"
+        )
+    }, ensure_ascii=False))
 
 def main():
     args = sys.argv[1:]
@@ -195,8 +295,12 @@ def main():
         cmd_clear()
     elif args[0] == "holder" and len(args) >= 2:
         cmd_set_holder(" ".join(args[1:]))
-    elif args[0] == "setup":
-        cmd_setup(args[1] if len(args) > 1 else "")
+    elif args[0] == "setup_feishu":
+        cmd_setup_feishu(args[1] if len(args) > 1 else "")
+    elif args[0] == "setup_local":
+        cmd_setup_local()
+    elif args[0] == "ask_setup":
+        cmd_ask_setup()
     else:
         print(__doc__)
 
